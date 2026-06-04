@@ -1,0 +1,39 @@
+name: Check Missing Files and Errors
+
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for mandatory files
+        run: |
+          echo "Checking for required files..."
+          MISSING_FILES=0
+          
+          if [ ! -f "plugin.js" ]; then
+            echo "::error::File 'plugin.js' missing!"
+            MISSING_FILES=1
+          fi
+          
+          if [ ! -f "plugin.json" ]; then
+            echo "::error::File 'plugin.json' missing!"
+            MISSING_FILES=1
+          fi
+          
+          if [ $MISSING_FILES -eq 1 ]; then
+            exit 1
+          else
+            echo "All files present."
+          fi
+
+      - name: Check for 'btoa' usage
+        run: |
+          echo "Scanning for risky 'btoa' usage..."
+          # Yeh command search karegi ki code mein 'btoa' hai ya nahi
+          if grep -r "btoa" .; then
+            echo "::warning:: 'btoa' found in code. It might fail in Node.js environment. Consider using Buffer.from().toString('base64')."
+          fi
