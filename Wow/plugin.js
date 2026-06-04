@@ -1,30 +1,14 @@
-/**
- * WOW.XXX Plugin for SkyStream
- * Source: https://www.wow.xxx
- * Features: Latest Updates, Most Popular (Today/Week/All), Search, Video Streams
- */
-
 (function () {
-    /**
-     * @type {import('@skystream/sdk').Manifest}
-     */
-    // manifest is injected at runtime
-
     const HEADERS = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
         "Referer": "https://www.wow.xxx/"
     };
-
-    /**
-     * Parse video items from HTML
-     * @param {string} html - The HTML content
-     * @returns {Array} Array of MultimediaItem objects
-     */
-    function parseVideoItems(html) {
+        
+        function parseVideoItems(html) {
         const items = [];
-        // Match video items using regex patterns
+        
         const itemPattern = /<div class="item">[\s\S]*?<a href="(https:\/\/www\.wow\.xxx\/videos\/[^"]+)"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*alt="([^"]+)"[\s\S]*?<\/div>/g;
         
         let match;
@@ -44,7 +28,6 @@
             }
         }
         
-        // Fallback: try simpler pattern if first one doesn't match enough items
         if (items.length === 0) {
             const simplePattern = /<a href="(https:\/\/www\.wow\.xxx\/videos\/[^"]+)"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"[^>]*alt="([^"]+)"/g;
             while ((match = simplePattern.exec(html)) !== null) {
@@ -67,15 +50,10 @@
         return items;
     }
 
-    /**
-     * Get homepage content with menu categories
-     * @param {Function} cb - Callback function
-     */
     async function getHome(cb) {
         try {
             const baseUrl = manifest.baseUrl || "https://www.wow.xxx";
             
-            // Define the menu categories as requested
             const categories = {
                 "Latest Updates": `${baseUrl}/latest-updates/`,
                 "Most Popular Today": `${baseUrl}/most-popular/today/`,
@@ -85,22 +63,20 @@
             
             const data = {};
             
-            // Fetch each category
             for (const [categoryName, url] of Object.entries(categories)) {
                 try {
                     const res = await http_get(url, HEADERS);
                     if (res.status === 200 && res.body) {
                         const items = parseVideoItems(res.body);
                         if (items.length > 0) {
-                            data[categoryName] = items.slice(0, 20); // Limit to 20 items per category
-                        }
+                            data[categoryName] = items.slice(0, 20); 
                     }
+                        
                 } catch (e) {
                     console.error(`Error fetching ${categoryName}: ${e.message}`);
                 }
             }
             
-            // If no data was fetched, try the main page
             if (Object.keys(data).length === 0) {
                 const res = await http_get(baseUrl, HEADERS);
                 if (res.status === 200 && res.body) {
@@ -115,11 +91,6 @@
         }
     }
 
-    /**
-     * Search for videos
-     * @param {string} query - Search query
-     * @param {Function} cb - Callback function
-     */
     async function search(query, cb) {
         try {
             const baseUrl = manifest.baseUrl || "https://www.wow.xxx";
@@ -140,11 +111,6 @@
         }
     }
 
-    /**
-     * Load video details - MUST return MultimediaItem with episodes array
-     * @param {string} url - Video page URL
-     * @param {Function} cb - Callback function
-     */
     async function load(url, cb) {
         try {
             const res = await http_get(url, HEADERS);
@@ -155,32 +121,27 @@
             
             const html = res.body || "";
             
-            // Extract title
             const titleMatch = html.match(/<title>([^<]+)<\/title>/);
             const title = titleMatch ? titleMatch[1].replace(/\s*-\s*WOW\.XXX$/, '').trim() : "Unknown";
             
-            // Extract poster
             const posterMatch = html.match(/poster='([^']+)'/);
             const posterUrl = posterMatch ? posterMatch[1] : "";
             
-            // Create episode with the video page URL
-            // When user clicks this episode, loadStreams will be called with this URL
             const episode = new Episode({
                 name: "Play Video",
-                url: url,  // This URL will be passed to loadStreams
+                url: url,
                 season: 1,
                 episode: 1,
                 posterUrl: posterUrl
             });
             
-            // Create MultimediaItem with episodes array
             const item = new MultimediaItem({
                 title: title,
                 url: url,
                 posterUrl: posterUrl,
                 type: "movie",
                 isAdult: true,
-                episodes: [episode]  // THIS IS REQUIRED FOR PLAY BUTTON TO APPEAR
+                episodes: [episode] 
             });
             
             cb({ success: true, data: item });
@@ -190,15 +151,9 @@
         }
     }
 
-    /**
-     * Parse video stream URLs from video page HTML
-     * @param {string} html - The HTML content of video page
-     * @returns {Array} Array of objects with url and quality
-     */
     function parseVideoStreams(html) {
         const streams = [];
         
-        // Match source tags with their qualities
         const sourcePattern = /<source\s+src=['"](https:\/\/www\.wow\.xxx\/get_file\/[^'"]+)['"][^>]*label=['"]([\w\d]+p?)['"][^>]*>/gi;
         
         let match;
@@ -214,11 +169,6 @@
         return streams;
     }
 
-    /**
-     * Load video streams (playable URLs)
-     * @param {string} url - Video page URL (from Episode.url)
-     * @param {Function} cb - Callback function
-     */
     async function loadStreams(url, cb) {
         try {
             const res = await http_get(url, HEADERS);
@@ -234,16 +184,13 @@
                 return cb({ success: false, errorCode: "NO_STREAMS", message: "No video streams found" });
             }
             
-            // Convert to StreamResult objects with Magic Proxy for redirects
             const streams = rawStreams.map(stream => {
-                // Use Magic Proxy v1 to handle 302 redirects
-                // Format: MAGIC_PROXY_v1 + base64(url)
                 const base64Url = btoa(stream.url);
                 const proxyUrl = "MAGIC_PROXY_v1" + base64Url;
                 
                 return new StreamResult({
                     url: proxyUrl,
-                    source: stream.quality,  // Use 'source' not 'quality' for display
+                    source: stream.quality,
                     headers: {
                         "Referer": "https://www.wow.xxx/",
                         "User-Agent": HEADERS["User-Agent"]
@@ -258,7 +205,6 @@
         }
     }
 
-    // Export functions to SkyStream
     globalThis.getHome = getHome;
     globalThis.search = search;
     globalThis.load = load;
