@@ -1,6 +1,6 @@
 // ! Bu araç @techmind09 ından | @cloudstream-nsfw için yazılmıştır.
 
-package com.techmind
+package com.techmind09
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
