@@ -102,11 +102,7 @@ class MissAV : MainAPI() {
         }
 
         val document = app.get(url).document
-
-        val aramaCevap =
-            document.select("div.grid.grid-cols-2 > div").mapNotNull { it.toMainPageResult() }
-
-
+        val aramaCevap = document.select("div.grid.grid-cols-2 > div").mapNotNull { it.toMainPageResult() }
         return newSearchResponseList(aramaCevap, hasNext = true)
     }
 
@@ -114,15 +110,13 @@ class MissAV : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
-
         val title = document.selectFirst("h1.text-base")?.text()?.trim() ?: return null
         val poster = fixUrlNull(document.selectFirst("meta[property='og:image']")?.attr("content"))
         val year = document.selectFirst("time")?.text()?.split("-")?.firstOrNull()?.toIntOrNull()
 
-        val tags = document.select("div.text-secondary:contains(genre) a").map {
-            it.text().trim() }
-        val actresses = document.select("div.text-secondary:contains(actress) a").map {
-            Actor(it.text().trim()) }
+        val tags = document.select("div.text-secondary:contains(genre) a").map { it.text().trim() }
+        val actresses = document.select("div.text-secondary:contains(actress) a").map { Actor(it.text().trim()) }
+        
         return newMovieLoadResponse(title, url, TvType.NSFW, url) {
             this.posterUrl = poster
             this.year = year
@@ -143,14 +137,8 @@ class MissAV : MainAPI() {
 
             if (playlistId != null) {
                 callback.invoke(
-                    newExtractorLink(
-                        source = "MissAV",
-                        name = "MissAV",
-                        url = "https://surrit.com/$playlistId/playlist.m3u8",
-                        type = ExtractorLinkType.M3U8
-                    ) {
+                    newExtractorLink("MissAV", "MissAV", "https://surrit.com/$playlistId/playlist.m3u8", ExtractorLinkType.M3U8) {
                         this.referer = "$mainUrl/"
-                        this.headers = mapOf("Referer" to "$mainUrl/")
                     }
                 )
             }
@@ -160,41 +148,32 @@ class MissAV : MainAPI() {
             val doc = response.document
             val title = doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim().toString()
             val javCode = "([a-zA-Z]+-\\d+)".toRegex().find(title)?.groups?.get(1)?.value
-            if(!javCode.isNullOrEmpty())
-            {
-                val query = "$subtitleCatUrl/index.php?search=$javCode"
-                val subDoc = app.get(query, timeout = 15).document
-                val subList = subDoc.select("td a")
-                for(item in subList)
-                {
-                    if(item.text().contains(javCode,ignoreCase = true))
-                    {
-                        val fullUrl = "$subtitleCatUrl/${item.attr("href")}"
-                        val pDoc = app.get(fullUrl, timeout = 10).document
-                        val sList = pDoc.select(".col-md-6.col-lg-4")
-                        for(item in sList)
-                        {
-                            try {
-                                val language = item.select(".sub-single span:nth-child(2)").text()
-                                val text = item.select(".sub-single span:nth-child(3) a")
-                                if(text != null && text.size > 0 && text[0].text() == "Download")
-                                {
-                                    val url = "$subtitleCatUrl${text[0].attr("href")}"
-                                    subtitleCallback.invoke(
-                                        SubtitleFile(
-                                            language.replace("\uD83D\uDC4D \uD83D\uDC4E",""),  // Use label for the name
-                                            url     // Use extracted URL
-                                        )
-                                    )
-                                }
-                            } catch (e: Exception) { }
+            
+            if (!javCode.isNullOrEmpty()) {
+                val subDoc = app.get("$subtitleCatUrl/index.php?search=$javCode", timeout = 15).document
+                val subLink = subDoc.select("td a").find { it.text().contains(javCode, ignoreCase = true) }?.attr("href")
+                
+                if (subLink != null) {
+                    val pDoc = app.get("$subtitleCatUrl/$subLink", timeout = 10).document
+                    pDoc.select(".col-md-6.col-lg-4").forEach { item ->
+                        val languageRaw = item.select(".sub-single span:nth-child(2)").text().lowercase()
+                        val downloadBtn = item.select(".sub-single span:nth-child(3) a")
+                        
+                        val langCode = when {
+                            languageRaw.contains("english") -> "en"
+                            languageRaw.contains("hindi") -> "hi"
+                            else -> null
                         }
 
+                        if (langCode != null && downloadBtn.isNotEmpty()) {
+                            val subUrl = "$subtitleCatUrl${downloadBtn[0].attr("href")}"
+                            subtitleCallback.invoke(SubtitleFile(langCode, subUrl))
+                        }
                     }
                 }
-
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { Log.error(e) }
         return true
     }
 }
+
